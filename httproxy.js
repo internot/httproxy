@@ -52,7 +52,7 @@ var proxyInline = function(nodes, attr) {
 
 var eventInline = function(nodes, attr) {
   for (var i = 0; i < nodes.length; i++)
-    nodes[i]._attrsByQName[attr].data = 'JSFlow.monitor.handleEvent(\'' + nodes[i]._attrsByQName[attr].data.replace(/\\/g, '\\\\').replace(/'/g, '\\\'') + '\', event)'
+    nodes[i]._attrsByQName[attr].data = 'Monitor.handleEvent(\'' + nodes[i]._attrsByQName[attr].data.replace(/\\/g, '\\\\').replace(/'/g, '\\\'') + '\', event)'
 }
 
 // TODO: Add logging
@@ -65,10 +65,10 @@ var proxy = function(req, res) {
 
       if (fs.existsSync(lib + req.url)) {
         res.writeHead(200, { 'Content-Type': 'text/javascript' });
-        res.write(fs.readFileSync(lib + req.url));
+        res.write(fs.readFileSync(lib + req.url).toString().replace(/%hostname%/g, hostname));
       } else if (fs.existsSync(narcissus + req.url)) {
         res.writeHead(200, { 'Content-Type': 'text/javascript' });
-        res.write(fs.readFileSync(path + req.url));
+        res.write(fs.readFileSync(narcissus + req.url));
       } else {
         res.writeHead(404);
       }
@@ -102,12 +102,13 @@ var proxy = function(req, res) {
         delete pres.headers['cache-control'];
 
         if (/html/.test(pres.headers['content-type'])) {
-        
+
           var parser = new domino.Parser();
           parser.parse(pres);
           parser.on('end', function() {
             var document = parser.document();
 
+            // TODO: Seems to be some kind of problem with the line below, not all tags are selected
             proxyInline(document.querySelectorAll('a'), 'href');
             proxyInline(document.querySelectorAll('script[src]'), 'src');
             proxyInline(document.querySelectorAll('form[action]'), 'action');
@@ -119,7 +120,7 @@ var proxy = function(req, res) {
             // DONE: Handle inline scripts
             for (var i = 0; i < scripts.length; i++) {
               if (scripts[i].src === '/')
-                scripts[i].text = 'JSFlow.monitor.evaluate("' + scripts[i].text.replace(/^<!--/, '').replace(/for\s*\(\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*in/g, 'for(var $1 in').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, "\\n\\\n") + '")';
+                scripts[i].text = 'Monitor.evaluate("' + scripts[i].text.replace(/^<!--/, '').replace(/for\s*\(\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*in/g, 'for(var $1 in').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, "\\n\\\n") + '")';
             }
 
             // DONE: Handle all event handlers
@@ -127,9 +128,12 @@ var proxy = function(req, res) {
               eventInline(document.querySelectorAll('[' + events[key] + ']'), events[key]);
 
             // DONE: Add monitor
+            var bootstrap = document.createElement('script');
+            bootstrap.src = 'http://' + hostname + '/bootstrap.js';
+            document.head.insertBefore(bootstrap, document.head.firstChild);
             var monitor = document.createElement('script');
-            monitor.src = 'http://jsflow.monitor/bootstrap.js';
-            document.head.insertBefore(monitor, document.head.firstChild);
+            monitor.src = 'http://' + hostname + '/monitor.js';
+            document.head.insertBefore(monitor, bootstrap);
 
             var html = document.innerHTML;
             pres.headers['content-length'] = html.length;
@@ -144,29 +148,29 @@ var proxy = function(req, res) {
           // TODO: Calculate the new length instead of deleting the content-length header
           delete pres.headers['content-length'];
           res.writeHead(pres.statusCode, pres.headers);
-          res.write('JSFlow.monitor.evaluate("');
-          
+          res.write('Monitor.evaluate("');
+
           pres.on('data', function(chunk) {
             res.write(chunk.toString('utf8').replace(/for\s*\(\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*in/g, 'for(var $1 in').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, "\\n\\\n"));
           });
-          
+
           pres.on('end', function() {
             res.write('")');
             res.end();
           });
 
         } else {
-        
+
           res.writeHead(pres.statusCode, pres.headers);
-          
+
           pres.on('data', function(chunk) {
             res.write(chunk);
           });
-          
+
           pres.on('end', function() {
             res.end();
           });
-          
+
         }
 
       });
@@ -182,9 +186,9 @@ var proxy = function(req, res) {
     }
 
   } catch (e) {
-    
+
     console.log(e);
-    
+
   }
 }
 

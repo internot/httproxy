@@ -3,4 +3,4 @@
 	url = https://github.com/internot/domino.git
 [submodule "narcissus"]
 	path = narcissus
-	url = https://github.com/arnar/narcissus.git
+	url = http://github.com/arnar/narcissus.git
