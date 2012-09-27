@@ -1,6 +1,6 @@
 [submodule "domino"]
 	path = domino
-	url = git@github.com:internot/domino.git
+	url = https://github.com/internot/domino.git
 [submodule "narcissus"]
 	path = narcissus
-	url = git@github.com:arnar/narcissus.git
+	url = https://github.com/arnar/narcissus.git
