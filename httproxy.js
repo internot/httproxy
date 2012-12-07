@@ -7,16 +7,16 @@
 // Configuration
 var lib = 'lib';
 var narcissus = 'narcissus/lib';
-var hostname = 'jsflow.monitor';
+var hostname = process.argv[2] || 'jsflow.monitor';
 http.port = 80;
 https.port = 443;
 https.options = {
-  key: fs.readFileSync('jsflow.monitor.key'),
-  cert: fs.readFileSync('jsflow.monitor.cert')
+  key: fs.readFileSync(hostname + '.key'),
+  cert: fs.readFileSync(hostname + '.cert')
 };
 
 var host = new RegExp("\\." + hostname.replace(/\./, '\\.'));
-var url = /^(?:http:)?\/\/([.\-a-zA-Z0-9]+)/;
+var url = /^(?:https?:)?\/\/([.\-a-zA-Z0-9]+)/;
 var events = [
   'onload',
   'onunload',
@@ -114,13 +114,14 @@ var proxy = function(req, res) {
             proxyInline(document.querySelectorAll('form[action]'), 'action');
             proxyInline(document.querySelectorAll('iframe[src]'), 'src');
             proxyInline(document.querySelectorAll('frame[src]'), 'src');
-            //TODO: Deal with OBJECT and EMBED tags
+            proxyInline(document.querySelectorAll('area[href]'), 'href');
+            // TODO: Deal with OBJECT and EMBED tags
 
             var scripts = document.querySelectorAll('script');
             // DONE: Handle inline scripts
             for (var i = 0; i < scripts.length; i++) {
               if (scripts[i].src === '/')
-                scripts[i].text = 'Monitor.evaluate("' + scripts[i].text.replace(/^<!--/, '').replace(/for\s*\(\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*in/g, 'for(var $1 in').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, "\\n\\\n") + '")';
+                scripts[i].text = 'Monitor.evaluate("' + scripts[i].text.replace(/^<!--/, '').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, "\\n\\\n") + '")';
             }
 
             // DONE: Handle all event handlers
@@ -151,7 +152,7 @@ var proxy = function(req, res) {
           res.write('Monitor.evaluate("');
 
           pres.on('data', function(chunk) {
-            res.write(chunk.toString('utf8').replace(/for\s*\(\s*([a-zA-Z_$][a-zA-Z0-9_$]*)\s*in/g, 'for(var $1 in').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, "\\n\\\n"));
+            res.write(chunk.toString('utf8').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, "\\n\\\n"));
           });
 
           pres.on('end', function() {
