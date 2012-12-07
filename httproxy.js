@@ -7,9 +7,11 @@
 // Configuration
 var lib = 'lib';
 var narcissus = 'narcissus/lib';
+
 var hostname = process.argv[2] || 'jsflow.monitor';
-http.port = 80;
-https.port = 443;
+http.port = process.argv[3] || 80;
+https.port = process.argv[4] || 443;
+
 https.options = {
   key: fs.readFileSync(hostname + '.key'),
   cert: fs.readFileSync(hostname + '.cert')
@@ -58,6 +60,7 @@ var eventInline = function(nodes, attr) {
 // TODO: Add logging
 var proxy = function(req, res) {
   try {
+    console.log('Proxying: ' + req.headers['host'] + req.url);
     // DONE: Serve monitor files
     if (req.headers['host'] === hostname) {
       // DONE: Prevent directory traversal attacks
@@ -182,6 +185,11 @@ var proxy = function(req, res) {
 
       req.on('end', function() {
         preq.end();
+      });
+
+      preq.on('error', function(e) {
+        res.end();
+        console.log('Error proxying request: ' + e);
       });
 
     }
