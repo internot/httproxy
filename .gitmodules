@@ -4,3 +4,6 @@
 [submodule "narcissus"]
 	path = narcissus
 	url = http://github.com/arnar/narcissus.git
+[submodule "jsflow"]
+	path = jsflow
+	url = https://github.com/arnar/jsflow.git
