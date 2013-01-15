@@ -6,7 +6,7 @@
 
 // Configuration
 var lib = 'lib';
-var narcissus = 'narcissus/lib';
+var jsflow = 'jsflow/lib';
 
 var hostname = process.argv[2] || 'jsflow.monitor';
 http.port = process.argv[3] || 80;
@@ -69,9 +69,9 @@ var proxy = function(req, res) {
       if (fs.existsSync(lib + req.url)) {
         res.writeHead(200, { 'Content-Type': 'text/javascript' });
         res.write(fs.readFileSync(lib + req.url).toString().replace(/%hostname%/g, hostname));
-      } else if (fs.existsSync(narcissus + req.url)) {
+      } else if (fs.existsSync(jsflow + req.url)) {
         res.writeHead(200, { 'Content-Type': 'text/javascript' });
-        res.write(fs.readFileSync(narcissus + req.url));
+        res.write(fs.readFileSync(jsflow + req.url));
       } else {
         res.writeHead(404);
       }
@@ -152,14 +152,14 @@ var proxy = function(req, res) {
           // TODO: Calculate the new length instead of deleting the content-length header
           delete pres.headers['content-length'];
           res.writeHead(pres.statusCode, pres.headers);
-          res.write('Monitor.evaluate("');
+          res.write('try{Monitor.evaluate("');
 
           pres.on('data', function(chunk) {
             res.write(chunk.toString('utf8').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, "\\n\\\n"));
           });
 
           pres.on('end', function() {
-            res.write('")');
+            res.write('")}catch(e){console.log(e.stack)}');
             res.end();
           });
 
