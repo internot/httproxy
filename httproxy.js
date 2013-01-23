@@ -5,16 +5,17 @@
   domino = require('./domino/lib');
 
 // Configuration
-var lib = 'lib';
-var jsflow = 'jsflow/lib';
+var lib = 'lib',
+ jsflow = 'jsflow/lib',
+  cache = 'cache';
 
 var hostname = process.argv[2] || 'jsflow.monitor';
 http.port = process.argv[3] || 80;
 https.port = process.argv[4] || 443;
 
 https.options = {
-  key: fs.readFileSync(hostname + '.key'),
-  cert: fs.readFileSync(hostname + '.cert')
+  key: fs.readFileSync(hostname.match(/(?:.*\.|)(.+\..+)/)[1] + '.key'),
+  cert: fs.readFileSync(hostname.match(/(?:.*\.|)(.+\..+)/)[1] + '.cert')
 };
 
 var host = new RegExp("\\." + hostname.replace(/\./, '\\.'));
@@ -58,9 +59,10 @@ var eventInline = function(nodes, attr) {
 }
 
 // TODO: Add logging
-var proxy = function(req, res) {
+var proxy = function (req, res) {
   try {
-    console.log('Proxying: ' + req.headers['host'] + req.url);
+    res = new CachedWrite(res);
+
     // DONE: Serve monitor files
     if (req.headers['host'] === hostname) {
       // DONE: Prevent directory traversal attacks
@@ -77,7 +79,25 @@ var proxy = function(req, res) {
       }
       res.end();
 
+    } else if (fs.existsSync(cache + '/' + req.headers.host + req.url.replace(/[\\\/:\?\*"<>|]/g, function ($1) { return '%' + $1.charCodeAt(0).toString(16) }))) {
+
+      console.log('Cached: ' + req.headers['host'] + req.url);
+      // DONE: Add caching
+      // TODO: Read cached headers
+      // DONE: Read cached page
+      res.writeHead(200, {});
+      res.write(fs.readFileSync(cache + '/' + req.headers.host + req.url.replace(/[\\\/:\?\*"<>|]/g, function ($1) { return '%' + $1.charCodeAt(0).toString(16) })))
+      // TODO: Serialize?
+      res.end();
     } else {
+
+      console.log('Proxying: ' + req.headers['host'] + req.url);
+
+      // DONE: if lastchar == / then lastchar = /index.html
+      try {
+        res.fd = fs.openSync(cache + '/' + req.headers.host + req.url.replace(/[\\\/:\?\*"<>|]/g, function ($1) { return '%' + $1.charCodeAt(0).toString(16) }), 'wx');
+      } catch (e) { console.log('Crashed here: ' + e) }
+
       // DONE: Strip headers (prevent encoding and disable caching)
       delete req.headers['accept-encoding'];
       delete req.headers['if-modified-since'];
@@ -91,7 +111,7 @@ var proxy = function(req, res) {
       req.path = req.url;
 
       // DONE: Add HTTPS support
-      var preq = (req.protocol == 'http:' ? http : https).request(req, function(pres) {
+      var preq = (req.protocol == 'http:' ? http : https).request(req, function (pres) {
 
         // DONE: Rewrite redirects (status 302)
         if (pres.headers['location'])
@@ -108,7 +128,7 @@ var proxy = function(req, res) {
 
           var parser = new domino.Parser();
           parser.parse(pres);
-          parser.on('end', function() {
+          parser.on('end', function () {
             var document = parser.document();
 
             // TODO: Seems to be some kind of problem with the line below, not all tags are selected
@@ -154,11 +174,11 @@ var proxy = function(req, res) {
           res.writeHead(pres.statusCode, pres.headers);
           res.write('try{Monitor.evaluate("');
 
-          pres.on('data', function(chunk) {
+          pres.on('data', function (chunk) {
             res.write(chunk.toString('utf8').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, "\\n\\\n"));
           });
 
-          pres.on('end', function() {
+          pres.on('end', function () {
             res.write('")}catch(e){console.log(e.stack)}');
             res.end();
           });
@@ -167,11 +187,11 @@ var proxy = function(req, res) {
 
           res.writeHead(pres.statusCode, pres.headers);
 
-          pres.on('data', function(chunk) {
+          pres.on('data', function (chunk) {
             res.write(chunk);
           });
 
-          pres.on('end', function() {
+          pres.on('end', function () {
             res.end();
           });
 
@@ -179,15 +199,15 @@ var proxy = function(req, res) {
 
       });
 
-      req.on('data', function(chunk) {
+      req.on('data', function (chunk) {
         preq.write(chunk);
       });
 
-      req.on('end', function() {
+      req.on('end', function () {
         preq.end();
       });
 
-      preq.on('error', function(e) {
+      preq.on('error', function (e) {
         res.end();
         console.log('Error proxying request: ' + e);
       });
@@ -199,6 +219,26 @@ var proxy = function(req, res) {
     console.log(e);
 
   }
+}
+
+function CachedWrite(res) {
+
+  this.writeHead = function (status, headers) {
+    res.writeHead(status, headers);
+  }
+  this.write = function (text) {
+    res.write(text);
+    if (this.fd)
+      fs.write(this.fd, text);
+  }
+  this.end = function (text) {
+    res.end(text);
+    if (this.fd) {
+      fs.write(this.fd, text);
+      fs.close(this.fd);
+    }
+  }
+
 }
 
 // DONE: Add HTTPS support
