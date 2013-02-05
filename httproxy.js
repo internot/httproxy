@@ -102,7 +102,7 @@ var proxy = function (req, res) {
       req.url = req.url.replace(/\/(\.\.\/)+/g, '/');
 
       if (fs.existsSync(lib + req.url)) {
-        res.writeHead(200, { 'Content-Type': 'text/javascript' });
+        res.writeHead(200, { 'Content-Type': /.*\.js$/.test(req.url) ? 'text/javascript' : 'text/html' });
         res.write(fs.readFileSync(lib + req.url).toString().replace(/%hostname%/g, hostname));
       } else if (fs.existsSync(jsflow + req.url)) {
         res.writeHead(200, { 'Content-Type': 'text/javascript' });

@@ -1,0 +1,18 @@
+<!DOCTYPE html />
+<html>
+<head>
+<script src="monitor.js"></script>
+<script src="bootstrap.js"></script>
+<title>Basic information-flow challenge</title>
+<script>
+location.hash = Math.random()
+Monitor.evaluate("var secret = location.hash");
+</script>
+</head>
+<body>
+<h1>Basic information-flow challenge</h1>
+<p>Challenge: Create an image-tag that leaks the value of the secret variable, OR escape the monitor (should be easy at the moment)</p>
+<textarea id="js" cols="80" rows="15"></textarea>
+<button onclick="Monitor.evaluate(document.getElementById('js').value)">Evaluate</button>
+</body>
+</html>
