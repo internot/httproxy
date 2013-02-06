@@ -9,7 +9,7 @@ var rand = Math.random();
 Monitor.evaluate("var secret = upg(" + rand + ",'user'), public = 0;");
 function attack(js) {
     Monitor.evaluate(js);
-    Monitor.evaluate("new Image(1,1).src = public;");
+    Monitor.evaluate("new Image(1,1).src = 'http://www.google.se/?q=' + public;");
     if (Monitor.evaluate("public").value == rand)
         alert("Congratulations, you managed to leak the secret!");
     else
@@ -35,7 +35,7 @@ function attack(js) {
 <p>Code that is evaluated in the monitor: 
     <ol><li>var secret = upg(Math.random(), 'user'), public = 0;</li>
     <li>Your code...</li>
-    <li>new Image(1,1).src = public;</li>
+    <li>new Image(1,1).src = 'http://www.google.se/?q=' + public;</li>
     </ol>
 </p>
 </body>
