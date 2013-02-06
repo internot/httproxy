@@ -5,14 +5,38 @@
 <script src="bootstrap.js"></script>
 <title>Basic information-flow challenge</title>
 <script>
-location.hash = Math.random()
-Monitor.evaluate("var secret = location.hash");
+var rand = Math.random();
+Monitor.evaluate("var secret = upg(" + rand + ",'user'), public = 0;");
+function attack(js) {
+    Monitor.evaluate(js);
+    Monitor.evaluate("new Image(1,1).src = public;");
+    if (Monitor.evaluate("public").value == rand)
+        alert("Congratulations, you managed to leak the secret!");
+    else
+        alert("Nope, no leak.");
+}
 </script>
 </head>
 <body>
 <h1>Basic information-flow challenge</h1>
-<p>Challenge: Create an image-tag that leaks the value of the secret variable, OR escape the monitor (should be easy at the moment)</p>
-<textarea id="js" cols="80" rows="15"></textarea>
-<button onclick="Monitor.evaluate(document.getElementById('js').value)">Evaluate</button>
+<textarea id="js" cols="80" rows="15">public = secret;</textarea>
+<button onclick="attack(document.getElementById('js').value)">Evaluate</button>
+<p>Challenge: Leak the value of the secret variable to the public variable</p>
+<p>This can be achieved in one of two ways:
+    <ul><li>Identify an information-flow leak and exploit it.</li>
+    <li>Get your code to run outside the monitor and affect the monitor state (should be easy at the moment).</li></ul>
+</p>
+<p>Rules:
+    <ol><li>The code "new Image(1,1).src = public" should not trigger a security exception.</li>
+    <li>After running your code, the public variable should equal the initial value of the secret variable.</li>
+    <li>The monitor is timing insensitive, therefore timing attacks are not considered a complete solution to the challenge.</li>
+    <li>Due to limitations in the current wrapping of the DOM, the challenge is limited to Firefox.</li></ol>
+</p>
+<p>Code that is evaluated in the monitor: 
+    <ol><li>var secret = upg(Math.random(), 'user'), public = 0;</li>
+    <li>Your code...</li>
+    <li>new Image(1,1).src = public;</li>
+    </ol>
+</p>
 </body>
 </html>
