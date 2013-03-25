@@ -1,6 +1,5 @@
 ﻿var http = require('http'),
    https = require('https'),
-     url = require('url'),
       fs = require('fs'),
   domino = require('./domino/lib');
 
@@ -46,26 +45,12 @@ var events = [
   'onhelp' // XXX: Only seen it mentioned once, exists?
   ];
 
-var proxyInline = function(nodes, attr) {
-  for (var i = 0; i < nodes.length; i++) {
-    if (url.test(nodes[i][attr]))
-      nodes[i][attr] = nodes[i][attr].replace(url, '$1.' + hostname);
-  }
-}
-
 var eventInline = function(nodes, attr) {
   for (var i = 0; i < nodes.length; i++)
     nodes[i]._attrsByQName[attr].data = 'Monitor.handleEvent(\'' + nodes[i]._attrsByQName[attr].data.replace(/\\/g, '\\\\').replace(/'/g, '\\\'') + '\', event)'
 }
 
 var inlineHtml = function (document) {
-  // TODO: Seems to be some kind of problem with the line below, not all tags are selected
-  proxyInline(document.querySelectorAll('a'), 'href');
-  proxyInline(document.querySelectorAll('script[src]'), 'src');
-  proxyInline(document.querySelectorAll('form[action]'), 'action');
-  proxyInline(document.querySelectorAll('iframe[src]'), 'src');
-  proxyInline(document.querySelectorAll('frame[src]'), 'src');
-  proxyInline(document.querySelectorAll('area[href]'), 'href');
   // TODO: Deal with OBJECT and EMBED tags
   // TODO: Insert form[onsubmit] action to catch form submits in monitor
 
@@ -95,7 +80,8 @@ var inlineHtml = function (document) {
 var proxy = function (req, res) {
   try {
     //res = new CachedWrite(res);
-    var cached = cache + '/' + req.headers.host.replace(host, '') + req.url + '.' + req.method;
+    req.url = req.url.replace(/^.{8}[^/]+/,'');
+    var cached = cache + '/' + req.headers.host + req.url + '.' + req.method;
     // DONE: Serve monitor files
     if (req.headers['host'] === hostname) {
       // DONE: Prevent directory traversal attacks
@@ -122,7 +108,7 @@ var proxy = function (req, res) {
           data = fs.readFileSync(cached + '.data').toString();
       if (/html/.test(headers['content-type']))
         data = inlineHtml(domino.createDocument(data));
-      else if (/javascript/.test(headers['content-type']))
+      else if (/javascript|json/.test(headers['content-type']))
         data = 'Monitor.evaluate("' +
                 data.toString('utf8').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, "\\n\\\n") +
                 '")';
@@ -140,7 +126,7 @@ var proxy = function (req, res) {
 
     } else {
 
-      console.log('Proxying: ' + req.headers['host'] + req.url);
+      console.log('Proxying: ' + req.url);
 
       // DONE: if lastchar == / then lastchar = /index.html
       //      try {
@@ -154,65 +140,58 @@ var proxy = function (req, res) {
       delete req.headers['if-none-match'];
       delete req.headers['cache-control'];
 
-      // DONE: Strip monitor domain
-      req.host = req.headers.host = req.headers.host.replace(host, '');
-      if (req.headers.referer)
-        req.headers.referer = req.headers.referer.replace(host, '');
+      req.host = req.headers.host;
       req.path = req.url;
 
       // DONE: Add HTTPS support
-      var preq = (req.protocol == 'http:' ? http : https).request(req, function (pres) {
-
-        // DONE: Rewrite redirects (status 302)
-        if (pres.headers['location'])
-          pres.headers['location'] = pres.headers['location'].replace(url, '$1.' + hostname);
+      var proxyReq = (req.protocol == 'http:' ? http : https).request(req, function (proxyRes) {
 
         // DONE: Disable caching (at least temporarily)
-        delete pres.headers['last-modified'];
-        delete pres.headers['expires'];
-        delete pres.headers['etag'];
-        delete pres.headers['age'];
-        delete pres.headers['cache-control'];
+        delete proxyRes.headers['last-modified'];
+        delete proxyRes.headers['expires'];
+        delete proxyRes.headers['etag'];
+        delete proxyRes.headers['age'];
+        delete proxyRes.headers['cache-control'];
 
-        if (/html/.test(pres.headers['content-type'])) {
+        if (/html/.test(proxyRes.headers['content-type'])) {
 
           var parser = new domino.Parser();
-          parser.parse(pres);
+          parser.parse(proxyRes);
           parser.on('end', function () {
 
             var html = inlineHtml(parser.document());
-            pres.headers['content-length'] = html.length;
-            res.writeHead(pres.statusCode, pres.headers);
+            proxyRes.headers['content-length'] = html.length;
+            res.writeHead(proxyRes.statusCode, proxyRes.headers);
             res.write(html);
             res.end();
 
           });
 
-        } else if (/javascript/.test(pres.headers['content-type'])) {
+        } else if (/javascript/.test(proxyRes.headers['content-type'])) {
 
           // TODO: Calculate the new length instead of deleting the content-length header
-          delete pres.headers['content-length'];
-          res.writeHead(pres.statusCode, pres.headers);
+          delete proxyRes.headers['content-length'];
+          res.writeHead(proxyRes.statusCode, proxyRes.headers);
           res.write('Monitor.evaluate("');
 
-          pres.on('data', function (chunk) {
+          proxyRes.on('data', function (chunk) {
             res.write(chunk.toString('utf8').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, "\\n\\\n"));
           });
 
-          pres.on('end', function () {
+          proxyRes.on('end', function () {
             res.write('")');
             res.end();
           });
 
         } else {
 
-          res.writeHead(pres.statusCode, pres.headers);
+          res.writeHead(proxyRes.statusCode, proxyRes.headers);
 
-          pres.on('data', function (chunk) {
+          proxyRes.on('data', function (chunk) {
             res.write(chunk);
           });
 
-          pres.on('end', function () {
+          proxyRes.on('end', function () {
             res.end();
           });
 
@@ -221,14 +200,14 @@ var proxy = function (req, res) {
       });
 
       req.on('data', function (chunk) {
-        preq.write(chunk);
+        proxyReq.write(chunk);
       });
 
       req.on('end', function () {
-        preq.end();
+        proxyReq.end();
       });
 
-      preq.on('error', function (e) {
+      proxyReq.on('error', function (e) {
         res.end();
         console.log('Error proxying request: ' + e);
       });
